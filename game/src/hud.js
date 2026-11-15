@@ -231,7 +231,7 @@ export function createHud() {
       )).join('');
       const utilRows = Object.entries(GRENADES).map(([kind, def]) => (
         `<button class="buy-item" data-buy="util:${kind}" ${money < def.price ? 'disabled' : ''}>
-          <span class="buy-name">${def.name}</span><span class="buy-stat">${kind === 'frag' ? 'blast damage' : kind === 'flash' ? 'blinds 3.5 s' : 'blocks sight 14 s'}</span><span class="buy-price">$${def.price}</span>
+          <span class="buy-name">${def.name}</span><span class="buy-stat">${kind === 'frag' ? 'blast damage' : kind === 'flash' ? 'blinds 2.6 s' : 'blocks sight 14 s'}</span><span class="buy-price">$${def.price}</span>
         </button>`
       )).join('');
       menu.innerHTML = `

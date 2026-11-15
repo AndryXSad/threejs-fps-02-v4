@@ -490,10 +490,18 @@ export function createMap(scene) {
     group.add(post);
     const letter = new THREE.Mesh(
       new THREE.PlaneGeometry(1.8, 1.8),
-      new THREE.MeshBasicMaterial({ map: letterTexture(cp.key), transparent: true, color: new THREE.Color(OWNER_COLOR.neutral), side: THREE.DoubleSide, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ map: letterTexture(cp.key), transparent: true, color: new THREE.Color(OWNER_COLOR.neutral), depthWrite: false }),
     );
     letter.position.set(px + 2.2, 3.9, pz);
     group.add(letter);
+    // The same letter facing the other way: a single double-sided plane
+    // reads mirrored from behind, and the checkpoints are approached from
+    // both sides. Two front-sided planes, back to back, read correctly
+    // from either side with no z-fighting (one is always backface-culled).
+    const letterBack = new THREE.Mesh(letter.geometry, letter.material);
+    letterBack.position.copy(letter.position);
+    letterBack.rotation.y = Math.PI;
+    group.add(letterBack);
     const glow = new THREE.PointLight(new THREE.Color(OWNER_COLOR.neutral), 6, 10, 1.7);
     glow.position.set(px, 3.2, pz);
     scene.add(glow);

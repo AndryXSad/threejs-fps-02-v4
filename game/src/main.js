@@ -231,11 +231,11 @@ function fireWeapon(fighter) {
   const res = fireRound(fighter.weapon, origin, dir, fighter.weapon.bloom, Math.random, colliders, targets, fighter.weapon.def.range);
   if (!res) return;
   if (fighter === player) {
-    fx.tracer(origin, res.end, fighter.weapon.def.tracer);
+    if (res.point) fx.tracer(origin, res.point, fighter.weapon.def.tracer);
     fx.muzzleAt(viewmodel.muzzleWorld(), camera);
     viewmodel.kick(fighter.weapon.def.recoil);
-  } else {
-    fx.tracer(origin, res.end, fighter.weapon.def.tracer);
+  } else if (res.point) {
+    fx.tracer(origin, res.point, fighter.weapon.def.tracer);
   }
   for (const hit of res.hits) hurtFighter(hit.fighter, fighter, hit.part, hit.dmg, fighter.weapon.def, fighter.weapon.def.name);
   if (res.hits.length) hud.setCrosshairGap(2 + fighter.weapon.bloom * 500);
@@ -343,14 +343,13 @@ function updateBots(dt) {
     payloadDist: payload.state.dist,
     phase: rounds.state.phase,
     onShoot(bot, res, origin, dir) {
-      fx.tracer(origin, res.end, bot.weapon.def.tracer);
+      if (res.point) fx.tracer(origin, res.point, bot.weapon.def.tracer);
     },
     onDamage(shooter, victim, part, dmg, weaponDef, weaponName) {
       hurtFighter(victim, shooter, part, dmg, weaponDef, weaponName);
     },
     onThrow(kind, origin, vel, bot) {
       util.throw(kind, origin, vel, bot);
-    },
     },
   };
   for (const bot of bots) botStep(bot, ctx);
@@ -418,16 +417,20 @@ function respawnFighter(fighter) {
 
 function updateHud() {
   hud.setTimer(rounds.state.timeLeft > 0 ? `${Math.floor(rounds.state.timeLeft / 60)}:${String(Math.floor(rounds.state.timeLeft % 60)).padStart(2, '0')}` : '--:--');
-  const cart = trackPosAt(payload.state.dist);
+  const cartPos = trackPosAt(payload.state.dist);
   hud.setPayload(payload.state, TRACK_LENGTH);
   hud.setScores(rounds.state.score.ember, rounds.state.score.alloy);
   // The cart rides its rail, and the checkpoint markers repaint from the
   // payload state — a passed checkpoint burns orange, the next one grey.
-  cart.group.position.set(cart.x, 0, cart.z);
-  cart.group.rotation.y = cart.angle;
-  for (const marker of checkpoints) {
-    const passed = payload.state.checkpoints[marker.key].passed;
-    marker.mesh.material.color.copy(passed ? ownerColors.ember : ownerColors.neutral);
+  cart.group.position.set(cartPos.x, 0, cartPos.z);
+  cart.group.rotation.y = cartPos.angle;
+  for (const key of Object.keys(checkpoints)) {
+    const marker = checkpoints[key];
+    const passed = payload.state.checkpoints[key].passed;
+    const color = passed ? ownerColors.ember : ownerColors.neutral;
+    marker.ring.material.color.copy(color);
+    marker.letter.material.color.copy(color);
+    marker.glow.color.copy(color);
   }
   const visibleBots = bots.map((b) => ({
     x: b.x, z: b.z, team: b.team, alive: b.alive,
@@ -439,8 +442,8 @@ function updateHud() {
     smokes: util.clouds(),
     payload: {
       checkpoints: payload.state.checkpoints,
-      cartX: cart.x,
-      cartZ: cart.z,
+      cartX: cartPos.x,
+      cartZ: cartPos.z,
     },
   });
   hud.step(time);
@@ -564,10 +567,14 @@ function startMatch() {
 }
 
 function placePlayerForShot(mode) {
+  // 'start' is the odd one out: the start screen stays up and the match
+  // does NOT start — the shot is the title, the briefing and the button,
+  // with the yard behind it. Every other mode starts the match and stages
+  // the requested moment.
+  if (mode === 'start') return;
   matchStarted = true;
   document.getElementById('start-screen').classList.add('hidden');
   rounds.start();
-  if (mode === 'start') return;
   // 'play': jump straight into half 1 live, with the cart already at 20 m
   // (checkpoint A passed), bots riding the cart, and the player looking at
   // it from the rail bridge stairs.
@@ -598,7 +605,11 @@ function placePlayerForShot(mode) {
     hud.showBuyMenu(player.money, player.weapon.id, player.grenades, player.armor > 0);
     hud.setPhase('HALF 1 — EMBER ATTACKS · BUY PHASE');
   } else if (mode === 'end') {
-    rounds.state.phase = 'over';
+    // Terminal phase 'end': the round clock ignores it, so no intermission
+    // counts down into a phantom half 2 behind the end panel.
+    rounds.state.phase = 'end';
+    rounds.state.matchOver = true;
+    rounds.state.timeLeft = 0;
     rounds.state.score = { ember: 1, alloy: 0 };
     rounds.state.results = {
       ember: { dist: 64.5, time: 98.4 },
@@ -606,6 +617,13 @@ function placePlayerForShot(mode) {
     };
     rounds.state.winner = 'ember';
     handleRoundEvent('match-end', { results: rounds.state.results, score: rounds.state.score, winner: 'ember', history: ['E', '-'] });
+    // Step the camera off the cart's back: the spawn sits 2 m behind the
+    // cart, so a raw end shot is mostly orange cargo. From the side the
+    // yard, the rail and the bridge read behind the panel instead.
+    player.x = -23;
+    player.z = 16;
+    player.yaw = -0.7;
+    player.pitch = 0;
   }
 }
 
@@ -630,7 +648,7 @@ window.__dustline = {
     timeLeft: rounds.state.timeLeft,
     score: rounds.state.score,
     payload: payload.state,
-    player: { x: player.x, y: player.y, z: player.z, hp: player.hp, alive: player.alive, kills: player.kills, money: player.money },
+    player: { x: player.x, y: player.y, z: player.z, yaw: player.yaw, pitch: player.pitch, hp: player.hp, alive: player.alive, kills: player.kills, money: player.money },
     bots: bots.map((b) => ({ team: b.team, role: b.role, x: b.x, y: b.y, z: b.z, hp: b.hp, alive: b.alive, kills: b.kills, money: b.money, weapon: b.weapon.id })),
   }),
 };
